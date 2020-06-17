@@ -5,6 +5,9 @@ Parameters:
   FinnhubDataStreamName:
     Type: String
     Default: "finnhub-quote-data"
+  StockDataPrefix:
+    Type: String
+    Default: "stockdata/"
 
 Resources:
   IAMRoleProject:
@@ -23,9 +26,22 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
 
+  LambdaRequestCurrentStockData:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt IAMRoleProject.Arn
+      CodeUri: request_current_stock_data/
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Timeout: 60
+      Environment:
+        Variables:
+          requeststockdataqueue: !Ref QueueStockDataRequest
+
   LambdaGetCurrentStockData:
     Type: AWS::Serverless::Function
     Properties:
+      Role: !GetAtt IAMRoleProject.Arn
       CodeUri: get_current_stock_data/
       Handler: app.lambda_handler
       Runtime: python3.7
@@ -59,7 +75,67 @@ Resources:
           IntervalInSeconds: 60
         CompressionFormat: GZIP
         RoleARN: !GetAtt IAMRoleProject.Arn
-        Prefix: "stockdata/"
+        Prefix: !Ref StockDataPrefix
+
+  QueueStockDataRequest:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 60
+
+  TriggerCurrentStockDataRequest:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      Enabled: true
+      EventSourceArn: !GetAtt QueueStockDataRequest.Arn
+      FunctionName: !Ref LambdaGetCurrentStockData
+
+  EventTriggerRequestStockData:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(0/1 * * * ? *)"
+      State: "ENABLED"
+      Targets:
+        - Arn: !GetAtt LambdaRequestCurrentStockData.Arn
+          Id: "LambdaRequestCurrentStockData"
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaRequestCurrentStockData
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt EventTriggerRequestStockData.Arn
+
+  DatabaseVacationAnalytics:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: "vacation-analyitcs"
+
+  TableStokeQuoteLandingRaw:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseVacationAnalytics
+      TableInput:
+        Name: "stock-quote-landing-raw"
+        TableType: "EXTERNAL_TABLE"
+        StorageDescriptor:
+          InputFormat: "org.apache.hadoop.mapred.TextInputFormat"
+          OutputFormat: "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+          SerdeInfo:
+            SerializationLibrary: "org.openx.data.jsonserde.JsonSerDe"
+          Location:
+            !Sub "s3://${DataLakeStorage}/${StockDataPrefix}"
+          Columns:
+          - Name: symbol
+            Type: string
+          - Name: t
+            Type: string
+          - Name: capture_time
+            Type: string
 
 Outputs:
   LambdaGetCurrentStockDataAPN:

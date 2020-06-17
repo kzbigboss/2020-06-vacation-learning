@@ -158,8 +158,7 @@ def prepare_payload(symbol, epoch_now, finnhub_data):
 
 
 def push_to_data_stream(payload, stream_name):
-    print(payload)
-    print(stream_name)
+    print("Payload: %s" % (json.dumps(payload)))
 
     data_stream = boto3.client('kinesis')
 
