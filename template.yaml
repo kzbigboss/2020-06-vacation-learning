@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  FinnhubDataStreamName:
+    Type: String
+    Default: "finnhub-quote-data"
+
+Resources:
+  IAMRoleProject:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - firehose.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  LambdaGetCurrentStockData:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get_current_stock_data/
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Timeout: 60
+      Environment:
+        Variables:
+          finnhubdatastream: !Ref FinnhubDataStreamName
+          # finnhubapitoken: '{{resolve:secretsmanager:dev/token/finnhub}}'
+          # Note: Can't resolve a dynamic reference when testing in
+          # PyCharm via AWS Toolkit
+
+  DataStreamStockQuote:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Ref FinnhubDataStreamName
+      ShardCount: 1
+
+  DataLakeStorage:
+    Type: AWS::S3::Bucket
+
+  DataDeliveryStockQuote:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamType: "KinesisStreamAsSource"
+      KinesisStreamSourceConfiguration:
+        KinesisStreamARN: !GetAtt DataStreamStockQuote.Arn
+        RoleARN: !GetAtt IAMRoleProject.Arn
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt DataLakeStorage.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+        CompressionFormat: GZIP
+        RoleARN: !GetAtt IAMRoleProject.Arn
+        Prefix: "stockdata/"
+
+Outputs:
+  LambdaGetCurrentStockDataAPN:
+    Value: !GetAtt LambdaGetCurrentStockData.Arn
+  DataStreamAPN:
+    Value: !GetAtt DataStreamStockQuote.Arn
