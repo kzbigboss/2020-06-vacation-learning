@@ -25,6 +25,9 @@ Resources:
               - 'sts:AssumeRole'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
+      Tags:
+        - Key: "costcenter"
+          Value: "infrastructure"
 
   LambdaRequestCurrentStockData:
     Type: AWS::Serverless::Function
@@ -37,6 +40,8 @@ Resources:
       Environment:
         Variables:
           requeststockdataqueue: !Ref QueueStockDataRequest
+      Tags:
+        costcenter: "compute-stock-data"
 
   LambdaGetCurrentStockData:
     Type: AWS::Serverless::Function
@@ -52,15 +57,24 @@ Resources:
           # finnhubapitoken: '{{resolve:secretsmanager:dev/token/finnhub}}'
           # Note: Can't resolve a dynamic reference when testing in
           # PyCharm via AWS Toolkit
+      Tags:
+        costcenter: "compute-stock-data"
 
   DataStreamStockQuote:
     Type: AWS::Kinesis::Stream
     Properties:
       Name: !Ref FinnhubDataStreamName
       ShardCount: 1
+      Tags:
+        - Key: "costcenter"
+          Value: "infrastructure"
 
   DataLakeStorage:
     Type: AWS::S3::Bucket
+    Properties:
+      Tags:
+        - Key: "costcenter"
+          Value: "infrastructure"
 
   DataDeliveryStockQuote:
     Type: AWS::KinesisFirehose::DeliveryStream
@@ -76,11 +90,15 @@ Resources:
         CompressionFormat: GZIP
         RoleARN: !GetAtt IAMRoleProject.Arn
         Prefix: !Ref StockDataPrefix
+        #TODO No Tags parameter, need to use API to issue tag to Firehose
 
   QueueStockDataRequest:
     Type: AWS::SQS::Queue
     Properties:
       VisibilityTimeout: 60
+      Tags:
+        - Key: "costcenter"
+          Value: "infrastructure"
 
   TriggerCurrentStockDataRequest:
     Type: AWS::Lambda::EventSourceMapping
@@ -98,6 +116,7 @@ Resources:
       Targets:
         - Arn: !GetAtt LambdaRequestCurrentStockData.Arn
           Id: "LambdaRequestCurrentStockData"
+      #TODO add tag via console/API
 
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission
