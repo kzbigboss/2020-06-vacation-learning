@@ -66,6 +66,8 @@ Resources:
       Role: !GetAtt IAMRoleProject.Arn
       CodeUri: fct_get_current_stock_data/
       Handler: app.lambda_handler
+      Layers:
+        - !Ref LayerLambdaHelper
       Runtime: python3.7
       Timeout: 60
       Environment:

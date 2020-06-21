@@ -1,27 +1,10 @@
+import helper as h
 import json
 import requests
 import boto3
 import base64
 from botocore.exceptions import ClientError
 import datetime
-import os
-
-
-def get_environ_variable(variable_name):
-    """
-    Helper to grab Lambda's env vars
-
-    :param variable_name: string, named of
-    :return:
-    """
-
-    try:
-        variable = os.environ[variable_name]
-    except:
-        print("Environment variable name not found")
-        exit()
-
-    return variable
 
 
 def get_finnhub_api_token():
@@ -157,20 +140,6 @@ def prepare_payload(symbol, epoch_now, finnhub_data):
     return finnhub_data
 
 
-def push_to_data_stream(payload, stream_name):
-    print("Payload: %s" % (json.dumps(payload)))
-
-    data_stream = boto3.client('kinesis')
-
-    response = data_stream.put_record(
-        StreamName=stream_name,
-        Data=json.dumps(payload).encode('utf-8')+b'\n',
-        PartitionKey="examplekey"
-    )
-
-    return response
-
-
 def lambda_handler(event, context):
     # Prepare SQS message bodies for processing
     messages = parse_sqs_messages(event)
@@ -192,7 +161,7 @@ def lambda_handler(event, context):
         )
 
         # Push payload into data stream
-        response = push_to_data_stream(
+        response = h.push_to_data_stream(
             payload,
-            get_environ_variable("finnhubdatastream")
+            h.get_environ_variable("finnhubdatastream")
         )

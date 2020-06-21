@@ -61,6 +61,20 @@ def send_to_sqs(payload, queue_url):
     print("Sent payload: %s" % payload_string)
 
 
+def push_to_data_stream(payload, stream_name):
+    print("Payload: %s" % (json.dumps(payload)))
+
+    data_stream = boto3.client('kinesis')
+
+    response = data_stream.put_record(
+        StreamName=stream_name,
+        Data=json.dumps(payload).encode('utf-8')+b'\n',
+        PartitionKey="examplekey"
+    )
+
+    return response
+
+
 def generate_data_check_query(symbol):
     query_base = """
         with expected_timestamps as (
