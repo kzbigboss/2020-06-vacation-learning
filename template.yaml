@@ -8,6 +8,12 @@ Parameters:
   StockDataPrefix:
     Type: String
     Default: "stockdata/"
+  DatabaseName:
+    Type: String
+    Default: vacation-analyitcs
+  TableStockName:
+    Type: String
+    Default: stock-quote-landing-raw
 
 Resources:
   IAMRoleProject:
@@ -29,12 +35,23 @@ Resources:
         - Key: "costcenter"
           Value: "infrastructure"
 
+  LayerLambdaHelper:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: layer_helper/
+      CompatibleRuntimes:
+        - python3.7
+    Metadata:
+      BuildMethod: python3.7
+
   LambdaRequestCurrentStockData:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt IAMRoleProject.Arn
-      CodeUri: request_current_stock_data/
+      CodeUri: fct_request_current_stock_data/
       Handler: app.lambda_handler
+      Layers:
+        - !Ref LayerLambdaHelper
       Runtime: python3.7
       Timeout: 60
       Environment:
@@ -47,7 +64,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Role: !GetAtt IAMRoleProject.Arn
-      CodeUri: get_current_stock_data/
+      CodeUri: fct_get_current_stock_data/
       Handler: app.lambda_handler
       Runtime: python3.7
       Timeout: 60
@@ -59,6 +76,21 @@ Resources:
           # PyCharm via AWS Toolkit
       Tags:
         costcenter: "compute-stock-data"
+
+  LambdaQueryStockData:
+      Type: AWS::Serverless::Function
+      Properties:
+        Role: !GetAtt IAMRoleProject.Arn
+        CodeUri: fct_query_stock_data/
+        Handler: app.lambda_handler
+        Runtime: python3.7
+        Timeout: 60
+        Environment:
+          Variables:
+            datalake_database: !Ref DatabaseName
+            datalake_table_stock: !Ref TableStockName
+        Tags:
+          costcenter: "compute-stock-data"
 
   DataStreamStockQuote:
     Type: AWS::Kinesis::Stream
@@ -131,7 +163,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: "vacation-analyitcs"
+        Name: !Ref DatabaseName
 
   TableStokeQuoteLandingRaw:
     Type: AWS::Glue::Table
@@ -139,7 +171,7 @@ Resources:
       CatalogId: !Ref AWS::AccountId
       DatabaseName: !Ref DatabaseVacationAnalytics
       TableInput:
-        Name: "stock-quote-landing-raw"
+        Name: !Ref TableStockName
         TableType: "EXTERNAL_TABLE"
         StorageDescriptor:
           InputFormat: "org.apache.hadoop.mapred.TextInputFormat"
