@@ -1,6 +1,25 @@
 import re
+import os
+import boto3
+import json
 import pandas as pd
-import random
+
+
+def get_environ_variable(variable_name):
+    """
+    Helper to grab Lambda's env vars
+
+    :param variable_name: string, named of
+    :return:
+    """
+
+    try:
+        variable = os.environ[variable_name]
+    except:
+        print("Environment variable name not found")
+        exit()
+
+    return variable
 
 
 def get_interested_stocks():
@@ -19,14 +38,27 @@ def get_interested_stocks():
         'ZM'
     ]
 
-    interested_stocks_payload = []
+    # interested_stocks_payload = []
+    #
+    # for stock in interested_stocks:
+    #     interested_stocks_payload.append(
+    #         {"symbol": stock}
+    #     )
 
-    for stock in interested_stocks:
-        interested_stocks_payload.append(
-            {"symbol": stock}
-        )
+    return interested_stocks
 
-    return random.sample(interested_stocks_payload, k=10)
+
+def send_to_sqs(payload, queue_url):
+    queue = boto3.client('sqs')
+
+    payload_string = json.dumps(payload)
+
+    response = queue.send_message(
+        QueueUrl=queue_url,
+        MessageBody=payload_string
+    )
+
+    print("Sent payload: %s" % payload_string)
 
 
 def generate_data_check_query(symbol):
