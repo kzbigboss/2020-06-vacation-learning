@@ -104,6 +104,9 @@ Resources:
         - !Ref LayerLambdaHelper
       Runtime: python3.7
       Timeout: 60
+      Environment:
+        Variables:
+          athena_database: !Ref DatabaseName
       Tags:
         costcenter: "compute-repair-step-function"
 

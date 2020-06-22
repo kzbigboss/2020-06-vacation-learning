@@ -86,14 +86,18 @@ def generate_data_check_query(query_range_start, query_range_end, stock_list):
 
 
 def lambda_handler(event, context):
-    if "query_range_start" in event:
-        query_range_start = event["query_range_start"]
-        query_range_end = event["query_range_end"]
+    if 'query_range_start' in event:
+        query_range_start = event['query_range_start']
+        query_range_end = event['query_range_end']
     else:
         query_range_start, query_range_end = get_epoch_prior_hour_range()
 
     interested_stocks = h.get_interested_stocks()
-
     query = generate_data_check_query(query_range_start, query_range_end, interested_stocks)
 
-    pass
+    database = h.get_environ_variable('athena_database')
+    workgroup = 'primary'
+
+    query_data = h.submit_and_retrieve_athena_query(query, database, workgroup)
+
+    print(query_data)

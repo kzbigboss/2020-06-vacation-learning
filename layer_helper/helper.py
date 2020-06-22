@@ -1,8 +1,8 @@
-import re
 import os
 import boto3
 import json
-import pandas as pd
+# import pandas as pd
+import time
 
 
 def get_environ_variable(variable_name):
@@ -68,11 +68,91 @@ def push_to_data_stream(payload, stream_name):
 
     response = data_stream.put_record(
         StreamName=stream_name,
-        Data=json.dumps(payload).encode('utf-8')+b'\n',
+        Data=json.dumps(payload).encode('utf-8') + b'\n',
         PartitionKey="examplekey"
     )
 
     return response
+
+
+def submit_athena_query(query, database, workgroup):
+    athena_client = boto3.client('athena')
+
+    response = athena_client.start_query_execution(
+        QueryString=query,
+        QueryExecutionContext={
+            'Database': database
+        },
+        WorkGroup=workgroup
+    )
+
+    return response['QueryExecutionId']
+
+
+def wait_for_athena_results(query_id):
+    athena_client = boto3.client('athena')
+
+    wait_state = ['QUEUED', 'RUNNING']
+
+    fail_state = ['FAILED', 'CANCELLED']
+
+    while True:
+        # get the query's execution response
+        query_execution = athena_client.get_query_execution(
+            QueryExecutionId=query_id
+        )
+
+        # parse the execution response to find the current query status
+        status = query_execution['QueryExecution']['Status']['State']
+        print("Current status for {}: {}".format(query_id, status))
+
+        # handle the current query status
+        if status in wait_state:
+            time.sleep(1)
+        elif status in fail_state:
+            print("QUERY FAILED")
+            return None
+        elif status == 'SUCCEEDED':
+            return None
+
+
+def get_athena_query_results(query_id):
+    athena_client = boto3.client('athena')
+
+    response = athena_client.get_query_results(
+        QueryExecutionId=query_id
+    )
+
+    return response
+
+
+# def parse_athena_results(query_data_dict):
+#
+#     results = {}
+#
+#     for row in query_data_dict['ResultSet']['Rows'][1:]:
+#         values = []
+#         for field in row['Data']:
+#             try:
+#                 values.append(list(field.values())[0])
+#             except:
+#                 values.append(list(' '))
+#
+#     print(values)
+#
+#     return 1
+
+
+def submit_and_retrieve_athena_query(query, database, workgroup):
+    query_id = submit_athena_query(query, database, workgroup)
+
+    wait_for_athena_results(query_id)
+
+    athena_results = get_athena_query_results(query_id)
+
+    # data = parse_athena_results(athena_results)
+
+    return athena_results
 
 
 def main():
