@@ -94,6 +94,19 @@ Resources:
         Tags:
           costcenter: "compute-stock-data"
 
+  LambdaFindMissingMinutes:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt IAMRoleProject.Arn
+      CodeUri: fct_find_missing_minutes/
+      Handler: app.lambda_handler
+      Layers:
+        - !Ref LayerLambdaHelper
+      Runtime: python3.7
+      Timeout: 60
+      Tags:
+        costcenter: "compute-repair-step-function"
+
   DataStreamStockQuote:
     Type: AWS::Kinesis::Stream
     Properties:
