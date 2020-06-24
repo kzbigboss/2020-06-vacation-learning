@@ -206,6 +206,66 @@ Resources:
           - Name: capture_time
             Type: string
 
+
+  DataTaskWithHealthCheck:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Definition:
+        StartAt: CheckDataHealth
+        States:
+          CheckDataHealth:
+            Type: Pass
+            Result: Payload
+            Next: DecideDataHealth
+          DecideDataHealth:
+            Type: Choice
+            Choices:
+              - Variable: $.health_pass
+                BooleanEquals: false
+                Next: DecideAttemptDataRepair
+              - Variable: $.health_pass
+                BooleanEquals: true
+                Next: ExecuteDataTask
+          DecideAttemptDataRepair:
+            Type: Pass
+            Result: foo
+            Next: AttemptDataRepair
+          AttemptDataRepair:
+            Type: Choice
+            Choices:
+              - Variable: $.attempt_repair
+                BooleanEquals: false
+                Next: ReportAlarm
+              - Variable: $.attempt_repair
+                BooleanEquals: true
+                Next: DecideDataRepair
+          ReportAlarm:
+            Type: Pass
+            Result: foo
+            End: true
+          DecideDataRepair:
+            Type: Choice
+            Choices:
+              - Variable: $.attempt_count
+                NumericEquals: 1
+                Next: RunDataRepair
+              - Variable: $.attempt_count
+                NumericGreaterThan: 1
+                Next: WaitDataRepair
+          WaitDataRepair:
+            Type: Wait
+            Seconds: 180
+            Next: RunDataRepair
+          RunDataRepair:
+            Type: Pass
+            Result: foo
+            Next: DecideDataHealth
+          ExecuteDataTask:
+            Type: Pass
+            Result: foo
+            End: true
+      Role: !GetAtt IAMRoleProject.Arn
+
 Outputs:
   LambdaGetCurrentStockDataAPN:
     Value: !GetAtt LambdaGetCurrentStockData.Arn
