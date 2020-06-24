@@ -1,7 +1,7 @@
 import os
 import boto3
 import json
-# import pandas as pd
+import pandas as pd
 import time
 
 
@@ -37,13 +37,6 @@ def get_interested_stocks():
         'WORK',
         'ZM'
     ]
-
-    # interested_stocks_payload = []
-    #
-    # for stock in interested_stocks:
-    #     interested_stocks_payload.append(
-    #         {"symbol": stock}
-    #     )
 
     return interested_stocks
 
@@ -126,31 +119,40 @@ def get_athena_query_results(query_id):
     return response
 
 
-# def parse_athena_results(query_data_dict):
-#
-#     results = {}
-#
-#     for row in query_data_dict['ResultSet']['Rows'][1:]:
-#         values = []
-#         for field in row['Data']:
-#             try:
-#                 values.append(list(field.values())[0])
-#             except:
-#                 values.append(list(' '))
-#
-#     print(values)
-#
-#     return 1
+def parse_missing_minutes(query_result):
+    # Use list comprehension to walk through the Rows in ResultSet
+    # and move the data into a list
+    clean_list = [[data.get('VarCharValue') for data in row['Data']]
+                  for row in query_result['ResultSet']['Rows']]
+
+    # Transform the list into a data frame
+    df = pd.DataFrame(clean_list[1:], columns=clean_list[0])
+
+    # Establish a `missing_minutes` payload dictionary
+    missing_minutes = {}
+
+    # Walk through the data frame
+    for i in df.index:
+        # Set variables
+        symbol = df['symbols'][i]
+        capture_minute = df['capture_minute'][i]
+
+        # if symbol isn't yet in `missing_minutes`, add it and the related capture_minute
+        if symbol not in missing_minutes:
+            missing_minutes[symbol] = [capture_minute]
+        # append the capture minute to the related symbol
+        else:
+            missing_minutes[symbol].append(capture_minute)
+
+    return missing_minutes
 
 
-def submit_and_retrieve_athena_query(query, database, workgroup):
+def get_query_from_athena(query, database, workgroup):
     query_id = submit_athena_query(query, database, workgroup)
 
     wait_for_athena_results(query_id)
 
     athena_results = get_athena_query_results(query_id)
-
-    # data = parse_athena_results(athena_results)
 
     return athena_results
 

@@ -39,9 +39,18 @@ def get_epoch_prior_hour_range():
 
 
 def generate_data_check_query(query_range_start, query_range_end, stock_list):
+    # for testing, variables to test query execution in Athena console
     # unix_timestamp_start = 1592776800
     # unix_timestamp_end = 1592780340
     # stock_list = ['AMZN', 'AAPL', 'FB']
+
+    # the below SQL prepares two data sets:
+    # [A] - Expected_timestamps: derived by unnesting a list of stock symbols and generating
+    #           the minutes found in a given range of time
+    # [B] - Actual_timestamps: actual data queried in the data lake with the
+    #           timestamp field ('t' below) is truncated/rounded to the minute the data was captured.
+    # With these data sets, we perform a minus (called 'except in Presto/Athena) between the two data sets
+    # to determine which expected timestamps are not found in the actual timestamps.
 
     query_base = """
     with expected_timestamps as (
@@ -86,18 +95,35 @@ def generate_data_check_query(query_range_start, query_range_end, stock_list):
 
 
 def lambda_handler(event, context):
+    # set query range variables if they exist in the Lambda event
     if 'query_range_start' in event:
         query_range_start = event['query_range_start']
         query_range_end = event['query_range_end']
     else:
         query_range_start, query_range_end = get_epoch_prior_hour_range()
 
+    # pull the stocks symbols we are interested in
     interested_stocks = h.get_interested_stocks()
+
+    # generate a query to check for missing minutes between the provide time ranges
+    # for the stock symbols we are interested in
     query = generate_data_check_query(query_range_start, query_range_end, interested_stocks)
 
+    # for testing, replace with this query to validate below will handle a query with zero records
+    # query = 'select 1 except select 1'
+
+    # set variables to run query in Athena
     database = h.get_environ_variable('athena_database')
     workgroup = 'primary'
 
-    query_data = h.submit_and_retrieve_athena_query(query, database, workgroup)
+    # run Athena query
+    query_data = h.get_query_from_athena(query, database, workgroup)
 
-    print(query_data)
+    # Parse Athena results for any missing minutes of data for each stock symbol
+    missing_minutes = h.parse_missing_minutes(query_data)
+
+    # Handle if there are missing minutes
+    if len(missing_minutes) == 0:
+        print("no missing minutes")
+    else:
+        print("handle missing minutes")
