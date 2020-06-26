@@ -137,7 +137,7 @@ def parse_missing_minutes(query_result):
     for i in df.index:
         # Set variables
         symbol = df['symbols'][i]
-        capture_minute = df['capture_minute'][i]
+        capture_minute = int(df['capture_minute'][i])
 
         # if symbol isn't yet in `missing_minutes`, add it and the related capture_minute
         if symbol not in missing_minutes:

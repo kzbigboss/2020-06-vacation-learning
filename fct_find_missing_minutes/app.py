@@ -55,7 +55,7 @@ def generate_data_check_query(query_range_start, query_range_end, stock_list):
     query_base = """
     with expected_timestamps as (
     select
-        capture_minute,
+        cast(to_unixtime(capture_minute) as integer) as capture_minute,
         symbols
     from
         unnest(sequence (from_unixtime ({unix_timestamp_start}),
@@ -64,7 +64,7 @@ def generate_data_check_query(query_range_start, query_range_end, stock_list):
         unnest(array {stock_list}) as t (symbols)),
     actual_timestamps as (
         select
-            date_trunc('minute', from_unixtime (cast(t as integer))) capture_minute,
+            cast(to_unixtime(date_trunc('minute', from_unixtime (cast(t as integer)))) as integer) capture_minute,
             symbol
         from
             "stock-quote-landing-raw"
