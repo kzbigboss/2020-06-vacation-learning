@@ -5,9 +5,15 @@ Parameters:
   FinnhubDataStreamName:
     Type: String
     Default: "finnhub-quote-data"
+  FinnhubDataRepairStreamName:
+    Type: String
+    Default: "finnhub-repair-data"
   StockDataPrefix:
     Type: String
     Default: "stockdata/"
+  StockDataRepairPrefix:
+    Type: String
+    Default: "stockdata/repair/"
   DatabaseName:
     Type: String
     Default: vacation-analyitcs
@@ -124,6 +130,23 @@ Resources:
         Tags:
           costcenter: "compute-repair-data"
 
+  LambdaPerformDataRepair:
+      Type: AWS::Serverless::Function
+      Properties:
+        Role: !GetAtt IAMRoleProject.Arn
+        CodeUri: fct_repair_past_stock_data/
+        Handler: app.lambda_handler
+        Runtime: python3.7
+        Layers:
+          - !Ref LayerLambdaHelper
+        Timeout: 300
+        MemorySize: 512
+        Environment:
+          Variables:
+            repairstream: !Ref FinnhubDataRepairStreamName
+        Tags:
+          costcenter: "compute-repair-data"
+
   DataStreamStockQuote:
     Type: AWS::Kinesis::Stream
     Properties:
@@ -154,7 +177,30 @@ Resources:
         CompressionFormat: GZIP
         RoleARN: !GetAtt IAMRoleProject.Arn
         Prefix: !Ref StockDataPrefix
-        #TODO No Tags parameter, need to use API to issue tag to Firehose
+
+  DataStreamRepairStockQuote:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Ref FinnhubDataRepairStreamName
+      ShardCount: 1
+      Tags:
+        - Key: "costcenter"
+          Value: "repair"
+
+  DataDeliveryRepairStockQuote:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamType: "KinesisStreamAsSource"
+      KinesisStreamSourceConfiguration:
+        KinesisStreamARN: !GetAtt DataStreamRepairStockQuote.Arn
+        RoleARN: !GetAtt IAMRoleProject.Arn
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt DataLakeStorage.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+        CompressionFormat: GZIP
+        RoleARN: !GetAtt IAMRoleProject.Arn
+        Prefix: !Ref StockDataRepairPrefix
 
   QueueStockDataRequest:
     Type: AWS::SQS::Queue
@@ -219,6 +265,8 @@ Resources:
             Type: string
           - Name: capture_time
             Type: string
+          - Name: data_state
+            Type: string
 
   DataTaskWithHealthCheck:
     Type: AWS::Serverless::StateMachine
@@ -252,28 +300,20 @@ Resources:
                 Next: ReportAlarm
               - Variable: $.repair_settings.attempt_repair
                 BooleanEquals: true
-                Next: DecideDataRepair
+                Next: RunDataRepair
           ReportAlarm:
             Type: Pass
             Result: foo
             End: true
-          DecideDataRepair:
-            Type: Choice
-            Choices:
-              - Variable: $.repair_settings.attempt_count
-                NumericEquals: 0
-                Next: RunDataRepair
-              - Variable: $.repair_settings.attempt_count
-                NumericGreaterThan: 0
-                Next: WaitDataRepair
-          WaitDataRepair:
-            Type: Wait
-            Seconds: 10
-            Next: RunDataRepair
           RunDataRepair:
-            Type: Pass
-            Result: null
-            Next: DecideDataHealth
+            Type: Task
+            Resource: !GetAtt LambdaPerformDataRepair.Arn
+            ResultPath: $.repair_status
+            Next: WaitForDataStream
+          WaitForDataStream:
+            Type: Wait
+            Seconds: 180
+            Next: CheckDataHealth
           ExecuteDataTask:
             Type: Pass
             Result: foo

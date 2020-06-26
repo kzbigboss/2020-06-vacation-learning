@@ -223,6 +223,20 @@ def get_finnhub_api_token():
     return json.loads(secret)['token_finnhub']
 
 
+def find_missing_minutes(past_data, interested_minutes):
+
+
+    for i, timestamp in enumerate(past_data["t"]):
+        if timestamp in interested_minutes:
+            data_chunk = {
+                "c": past_data["c"][i],
+                "h": past_data["h"][i],
+                "l": past_data["l"][i],
+                "o": past_data["o"][i],
+                "t": past_data["t"][i]
+            }
+
+
 def main():
     pass
 

@@ -131,5 +131,8 @@ def lambda_handler(event, context):
         response["health_pass"] = False
         response["missing_minutes"] = missing_minutes
         response["repair_settings"] = h.get_job_repair_settings()
+        response["range"] = {"minute_start": minute_start, "minute_end": minute_end}
+
+    print(response)
 
     return response

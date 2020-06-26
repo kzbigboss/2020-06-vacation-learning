@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     df_interested = df[df["t"].isin(interested_timestamps)]
 
-    # for each interested observation, prepare firehose payload
+    # for each interested observation, prepare payload
 
     for i, timestamp in enumerate(j["t"]):
         if timestamp in interested_timestamps:
@@ -64,7 +64,6 @@ if __name__ == "__main__":
                 "l": j["l"][i],
                 "o": j["o"][i],
                 "t": j["t"][i]
-                # ,"capture_time": 1593129600,
             }
 
             print(data_chunk)
