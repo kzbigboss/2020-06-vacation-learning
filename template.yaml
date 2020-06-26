@@ -206,7 +206,6 @@ Resources:
           - Name: capture_time
             Type: string
 
-
   DataTaskWithHealthCheck:
     Type: AWS::Serverless::StateMachine
     Properties:
