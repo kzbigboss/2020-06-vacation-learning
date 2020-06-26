@@ -96,18 +96,18 @@ def generate_data_check_query(query_range_start, query_range_end, stock_list):
 
 def lambda_handler(event, context):
     # set query range variables if they exist in the Lambda event
-    if 'query_range_start' in event:
-        query_range_start = event['query_range_start']
-        query_range_end = event['query_range_end']
+    if 'minute_start' in event:
+        minute_start = event['minute_start']
+        minute_end = event['minute_end']
     else:
-        query_range_start, query_range_end = get_epoch_prior_hour_range()
+        minute_start, minute_end = get_epoch_prior_hour_range()
 
     # pull the stocks symbols we are interested in
     interested_stocks = h.get_interested_stocks()
 
     # generate a query to check for missing minutes between the provide time ranges
     # for the stock symbols we are interested in
-    query = generate_data_check_query(query_range_start, query_range_end, interested_stocks)
+    query = generate_data_check_query(minute_start, minute_end, interested_stocks)
 
     # for testing, replace with this query to validate below will handle a query with zero records
     # query = 'select 1 except select 1'
@@ -122,8 +122,14 @@ def lambda_handler(event, context):
     # Parse Athena results for any missing minutes of data for each stock symbol
     missing_minutes = h.parse_missing_minutes(query_data)
 
+    response = {}
+
     # Handle if there are missing minutes
     if len(missing_minutes) == 0:
-        print("no missing minutes")
+        response["health_pass"] = True
     else:
-        print("handle missing minutes")
+        response["health_pass"] = False
+        response["missing_minutes"] = missing_minutes
+        response["repair_settings"] = h.get_job_repair_settings()
+
+    return response

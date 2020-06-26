@@ -27,6 +27,7 @@ Resources:
               Service:
                 - lambda.amazonaws.com
                 - firehose.amazonaws.com
+                - states.amazonaws.com
             Action:
               - 'sts:AssumeRole'
       ManagedPolicyArns:
@@ -109,6 +110,19 @@ Resources:
           athena_database: !Ref DatabaseName
       Tags:
         costcenter: "compute-repair-step-function"
+
+  LambdaDecideDataRepair:
+      Type: AWS::Serverless::Function
+      Properties:
+        Role: !GetAtt IAMRoleProject.Arn
+        CodeUri: fct_decide_data_repair/
+        Handler: app.lambda_handler
+        Runtime: python3.7
+        Layers:
+          - !Ref LayerLambdaHelper
+        Timeout: 60
+        Tags:
+          costcenter: "compute-repair-data"
 
   DataStreamStockQuote:
     Type: AWS::Kinesis::Stream
@@ -213,8 +227,8 @@ Resources:
         StartAt: CheckDataHealth
         States:
           CheckDataHealth:
-            Type: Pass
-            Result: Payload
+            Type: Task
+            Resource: !GetAtt LambdaFindMissingMinutes.Arn
             Next: DecideDataHealth
           DecideDataHealth:
             Type: Choice
@@ -226,16 +240,17 @@ Resources:
                 BooleanEquals: true
                 Next: ExecuteDataTask
           DecideAttemptDataRepair:
-            Type: Pass
-            Result: foo
+            Type: Task
+            Resource: !GetAtt LambdaDecideDataRepair.Arn
+            ResultPath: $.repair_settings
             Next: AttemptDataRepair
           AttemptDataRepair:
             Type: Choice
             Choices:
-              - Variable: $.attempt_repair
+              - Variable: $.repair_settings.attempt_repair
                 BooleanEquals: false
                 Next: ReportAlarm
-              - Variable: $.attempt_repair
+              - Variable: $.repair_settings.attempt_repair
                 BooleanEquals: true
                 Next: DecideDataRepair
           ReportAlarm:
@@ -245,19 +260,19 @@ Resources:
           DecideDataRepair:
             Type: Choice
             Choices:
-              - Variable: $.attempt_count
-                NumericEquals: 1
+              - Variable: $.repair_settings.attempt_count
+                NumericEquals: 0
                 Next: RunDataRepair
-              - Variable: $.attempt_count
-                NumericGreaterThan: 1
+              - Variable: $.repair_settings.attempt_count
+                NumericGreaterThan: 0
                 Next: WaitDataRepair
           WaitDataRepair:
             Type: Wait
-            Seconds: 180
+            Seconds: 10
             Next: RunDataRepair
           RunDataRepair:
             Type: Pass
-            Result: foo
+            Result: null
             Next: DecideDataHealth
           ExecuteDataTask:
             Type: Pass

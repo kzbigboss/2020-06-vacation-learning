@@ -157,6 +157,14 @@ def get_query_from_athena(query, database, workgroup):
     return athena_results
 
 
+def get_job_repair_settings():
+    return {
+        "attempt_repair": True,
+        "attempt_count": 0,
+        "attempts_limit": 3
+    }
+
+
 def main():
     pass
 
