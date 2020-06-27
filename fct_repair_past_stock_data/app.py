@@ -16,6 +16,8 @@ def get_past_finnhub_data(symbol, minute_start, minute_end):
 
     request_string = request_url + '&'.join(request_parameters)
 
+    print("request string: {}".format(request_string))
+
     j = requests.get(request_string).json()
 
     j.pop("s")  # remove Finnhub's status response
@@ -26,15 +28,16 @@ def get_past_finnhub_data(symbol, minute_start, minute_end):
 def find_missing_data(past_data, interested_minutes):
     found_data = []
 
-    for i, timestamp in enumerate(past_data["t"]):
-        if timestamp in interested_minutes:
-            found_data.append({
-                "c": past_data["c"][i],
-                "h": past_data["h"][i],
-                "l": past_data["l"][i],
-                "o": past_data["o"][i],
-                "t": past_data["t"][i]
-            })
+    if len(past_data) > 0:
+        for i, timestamp in enumerate(past_data["t"]):
+            if timestamp in interested_minutes:
+                found_data.append({
+                    "c": past_data["c"][i],
+                    "h": past_data["h"][i],
+                    "l": past_data["l"][i],
+                    "o": past_data["o"][i],
+                    "t": past_data["t"][i]
+                })
 
     return found_data
 
@@ -80,5 +83,5 @@ def lambda_handler(event, context):
 
     return {
         "repairs_made": repairs,
-        "repair_datetime": datetime.datetime.now().timestamp()
+        "latest_repair_attempt": datetime.datetime.now().timestamp()
     }
