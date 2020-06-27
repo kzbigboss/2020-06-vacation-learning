@@ -8,12 +8,18 @@ Parameters:
   FinnhubDataRepairStreamName:
     Type: String
     Default: "finnhub-repair-data"
+  FinnhubDataFailureStreamName:
+    Type: String
+    Default: "finnhub-failure-data"
   StockDataPrefix:
     Type: String
     Default: "stockdata/"
   StockDataRepairPrefix:
     Type: String
     Default: "stockdata/repair/"
+  StockDataFailurePrefix:
+    Type: String
+    Default: "stockdata/failure/"
   DatabaseName:
     Type: String
     Default: vacation-analyitcs
@@ -34,6 +40,7 @@ Resources:
                 - lambda.amazonaws.com
                 - firehose.amazonaws.com
                 - states.amazonaws.com
+                - events.amazonaws.com
             Action:
               - 'sts:AssumeRole'
       ManagedPolicyArns:
@@ -147,6 +154,23 @@ Resources:
         Tags:
           costcenter: "compute-repair-data"
 
+  LambdaReportDataFailure:
+      Type: AWS::Serverless::Function
+      Properties:
+        Role: !GetAtt IAMRoleProject.Arn
+        CodeUri: fct_data_failure/
+        Handler: app.lambda_handler
+        Runtime: python3.7
+        Layers:
+          - !Ref LayerLambdaHelper
+        Timeout: 300
+        MemorySize: 512
+        Environment:
+          Variables:
+            failurestream: !Ref FinnhubDataFailureStreamName
+        Tags:
+          costcenter: "compute-repair-data"
+
   DataStreamStockQuote:
     Type: AWS::Kinesis::Stream
     Properties:
@@ -202,6 +226,30 @@ Resources:
         RoleARN: !GetAtt IAMRoleProject.Arn
         Prefix: !Ref StockDataRepairPrefix
 
+  DataStreamFailureStockQuote:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Ref FinnhubDataFailureStreamName
+      ShardCount: 1
+      Tags:
+        - Key: "costcenter"
+          Value: "repair"
+
+  DataDeliveryFailureStockQuote:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamType: "KinesisStreamAsSource"
+      KinesisStreamSourceConfiguration:
+        KinesisStreamARN: !GetAtt DataStreamFailureStockQuote.Arn
+        RoleARN: !GetAtt IAMRoleProject.Arn
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt DataLakeStorage.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+        CompressionFormat: GZIP
+        RoleARN: !GetAtt IAMRoleProject.Arn
+        Prefix: !Ref StockDataFailurePrefix
+
   QueueStockDataRequest:
     Type: AWS::SQS::Queue
     Properties:
@@ -226,7 +274,6 @@ Resources:
       Targets:
         - Arn: !GetAtt LambdaRequestCurrentStockData.Arn
           Id: "LambdaRequestCurrentStockData"
-      #TODO add tag via console/API
 
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission
@@ -297,13 +344,13 @@ Resources:
             Choices:
               - Variable: $.repair_settings.attempt_repair
                 BooleanEquals: false
-                Next: ReportAlarm
+                Next: RunDataFailure
               - Variable: $.repair_settings.attempt_repair
                 BooleanEquals: true
                 Next: RunDataRepair
-          ReportAlarm:
-            Type: Pass
-            Result: foo
+          RunDataFailure:
+            Type: Task
+            Resource: !GetAtt LambdaReportDataFailure.Arn
             End: true
           RunDataRepair:
             Type: Task
@@ -312,13 +359,23 @@ Resources:
             Next: WaitForDataStream
           WaitForDataStream:
             Type: Wait
-            Seconds: 180
+            Seconds: 90
             Next: CheckDataHealth
           ExecuteDataTask:
             Type: Pass
             Result: foo
             End: true
       Role: !GetAtt IAMRoleProject.Arn
+
+  EventTriggerRepairStockData:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(5 * * * ? *)"
+      State: "ENABLED"
+      Targets:
+        - Arn: !Ref DataTaskWithHealthCheck
+          Id: !GetAtt DataTaskWithHealthCheck.Name
+          RoleArn: !GetAtt IAMRoleProject.Arn
 
 Outputs:
   LambdaGetCurrentStockDataAPN:

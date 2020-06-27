@@ -96,9 +96,9 @@ def generate_data_check_query(query_range_start, query_range_end, stock_list):
 
 def lambda_handler(event, context):
     # set query range variables if they exist in the Lambda event
-    if 'minute_start' in event:
-        minute_start = event['minute_start']
-        minute_end = event['minute_end']
+    if 'range' in event:
+        minute_start = event['range']['minute_start']
+        minute_end = event['range']['minute_end']
     else:
         minute_start, minute_end = get_epoch_prior_hour_range()
 
@@ -130,8 +130,11 @@ def lambda_handler(event, context):
     else:
         response["health_pass"] = False
         response["missing_minutes"] = missing_minutes
-        response["repair_settings"] = h.get_job_repair_settings()
         response["range"] = {"minute_start": minute_start, "minute_end": minute_end}
+        if "repair_settings" in event:
+            response["repair_settings"] = event["repair_settings"]
+        else:
+            response["repair_settings"] = h.get_job_repair_settings()
 
     print(response)
 
